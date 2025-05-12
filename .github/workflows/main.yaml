@@ -1,0 +1,85 @@
+name: Deploy Kafka Instance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Validate topics.json
+        run: |
+          jq . topics.json >/dev/null || exit 1
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Deploy to server
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: /home/${{ secrets.SERVER_USER }}/kafka
+        run: |
+          # Create deploy directory on server
+          ssh $SERVER_USER@$SERVER_IP "mkdir -p $DEPLOY_PATH"
+
+          # Copy project files
+          rsync -avz docker-compose.yml init-kafka.sh topics.json $SERVER_USER@$SERVER_IP:$DEPLOY_PATH/
+
+          # Deploy Kafka stack
+          ssh $SERVER_USER@$SERVER_IP << EOF
+            cd $DEPLOY_PATH
+            docker-compose down
+            docker-compose up -d --build
+            sleep 10
+            docker-compose exec kafka kafka-topics.sh --list --bootstrap-server kafka:9092
+          EOF
+
+      - name: Verify Kafka topics
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: /home/${{ secrets.SERVER_USER }}/kafka
+        run: |
+          ssh $SERVER_USER@$SERVER_IP << EOF
+            # Get list of existing topics
+            existing_topics=\$(docker-compose -f $DEPLOY_PATH/docker-compose.yml exec kafka kafka-topics.sh --list --bootstrap-server kafka:9092)
+
+            # Verify each topic from topics.json
+            all_found=true
+            jq -c '.[]' $DEPLOY_PATH/topics.json | while read -r topic; do
+              topic_name=\$(echo "\$topic" | jq -r '.name')
+              if echo "\$existing_topics" | grep -Fxq "\$topic_name"; then
+                echo "Topic '\$topic_name' found"
+              else
+                echo "Topic '\$topic_name' not found"
+                all_found=false
+              fi
+            done
+
+            if [ "\$all_found" = true ]; then
+              echo "All topics from topics.json verified"
+              exit 0
+            else
+              echo "One or more topics from topics.json not found"
+              exit 1
+            fi
+          EOF

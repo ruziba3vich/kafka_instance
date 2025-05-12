@@ -28,12 +28,12 @@ jobs:
 
       - name: Check Docker Compose
         run: |
-            if ! docker compose version > /dev/null 2>&1; then
-              echo "❌ Docker Compose is not installed or not available in PATH"
-              exit 1
-            else
-              echo "✅ Docker Compose is installed"
-            fi
+          if ! docker compose version > /dev/null 2>&1; then
+            echo "❌ Docker Compose is not installed or not available in PATH"
+            exit 1
+          else
+            echo "✅ Docker Compose is installed: $(docker compose version)"
+          fi
 
       - name: Deploy to server
         env:
@@ -41,18 +41,29 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DEPLOY_PATH: /home/${{ secrets.SERVER_USER }}/kafka
         run: |
-          # Create deploy directory on server
-          ssh $SERVER_USER@$SERVER_IP "mkdir -p $DEPLOY_PATH"
+          # Create deploy directory on server and set ownership
+          ssh $SERVER_USER@$SERVER_IP "mkdir -p $DEPLOY_PATH && chown 1000:1000 $DEPLOY_PATH"
 
           # Copy project files
-          rsync -avz docker-compose.yaml init-kafka.sh topics.json $SERVER_USER@$SERVER_IP:$DEPLOY_PATH/
+          rsync -avz docker-compose.yaml Dockerfile init-kafka.sh topics.json $SERVER_USER@$SERVER_IP:$DEPLOY_PATH/
+
+          # Set permissions and ownership
+          ssh $SERVER_USER@$SERVER_IP "chmod +x $DEPLOY_PATH/init-kafka.sh && chmod 644 $DEPLOY_PATH/docker-compose.yaml $DEPLOY_PATH/Dockerfile $DEPLOY_PATH/topics.json && chown 1000:1000 $DEPLOY_PATH/*"
+
+          # Debug: Verify files on server
+          ssh $SERVER_USER@$SERVER_IP "ls -l $DEPLOY_PATH"
 
           # Deploy Kafka stack
           ssh $SERVER_USER@$SERVER_IP << EOF
             cd $DEPLOY_PATH
             docker compose down
             docker compose up -d --build
-            sleep 10
+            sleep 30
+            # Debug: Check container status
+            docker ps -a
+            # Debug: Check Kafka logs
+            docker logs kafka 2>&1 || echo "Kafka container not found"
+            # List topics
             docker exec kafka kafka-topics.sh --list --bootstrap-server kafka:9092
           EOF
 

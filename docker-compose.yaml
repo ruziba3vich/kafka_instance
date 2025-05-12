@@ -1,22 +1,4 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_log:/var/lib/zookeeper/log
-    networks:
-      - kafka-network
-
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     depends_on:
@@ -43,20 +25,26 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
       - ./init-kafka.sh:/init-kafka.sh
+      - ./topics.json:/topics.json
     entrypoint: ["/bin/sh", "-c", "chmod +x /init-kafka.sh && /init-kafka.sh && /etc/confluent/docker/run"]
     networks:
       - kafka-network
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    ports:
-      - "8080:8080"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    depends_on:
-      - kafka
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     networks:
       - kafka-network
 
@@ -64,7 +52,3 @@ volumes:
   zookeeper_data:
   zookeeper_log:
   kafka_data:
-
-networks:
-  kafka-network:
-    driver: bridge

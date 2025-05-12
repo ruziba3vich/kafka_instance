@@ -52,3 +52,6 @@ volumes:
   zookeeper_data:
   zookeeper_log:
   kafka_data:
+
+networks:
+  kafka-network:

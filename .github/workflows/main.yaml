@@ -42,7 +42,7 @@ jobs:
           ssh $SERVER_USER@$SERVER_IP "mkdir -p $DEPLOY_PATH"
 
           # Copy project files
-          rsync -avz docker-compose.yml init-kafka.sh topics.json $SERVER_USER@$SERVER_IP:$DEPLOY_PATH/
+          rsync -avz docker-compose.yaml init-kafka.sh topics.json $SERVER_USER@$SERVER_IP:$DEPLOY_PATH/
 
           # Deploy Kafka stack
           ssh $SERVER_USER@$SERVER_IP << EOF
@@ -61,7 +61,7 @@ jobs:
         run: |
           ssh $SERVER_USER@$SERVER_IP << EOF
             # Get list of existing topics
-            existing_topics=\$(docker-compose -f $DEPLOY_PATH/docker-compose.yml exec kafka kafka-topics.sh --list --bootstrap-server kafka:9092)
+            existing_topics=\$(docker-compose -f $DEPLOY_PATH/docker-compose.yaml exec kafka kafka-topics.sh --list --bootstrap-server kafka:9092)
 
             # Verify each topic from topics.json
             all_found=true

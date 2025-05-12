@@ -1,0 +1,7 @@
+[
+    {
+      "name": "user.notifications",
+      "partitions": 1,
+      "replication_factor": 1
+    }
+]
